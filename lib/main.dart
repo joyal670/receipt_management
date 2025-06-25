@@ -3,13 +3,11 @@ import 'dart:math';
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:excel/excel.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, Uint8List;
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:universal_html/html.dart' as web_html;
 
 import 'invoice.dart';
 import 'invoice_view.dart';
@@ -17,6 +15,8 @@ import 'invoice_view.dart';
 void main() => runApp(MaterialApp(debugShowCheckedModeBanner: false, home: ReceiptScanner()));
 
 class ReceiptScanner extends StatefulWidget {
+  const ReceiptScanner({super.key});
+
   @override
   State<ReceiptScanner> createState() => _ReceiptScannerState();
 }
@@ -159,13 +159,6 @@ class _ReceiptScannerState extends State<ReceiptScanner> {
     );
   }
 
-  String _extractValue(List<String> lines, int index, String label) {
-    if (index >= lines.length) return '';
-    final line = lines[index];
-    final labelPattern = RegExp(r"$label[:\s]*", caseSensitive: false);
-    return line.replaceFirst(labelPattern, '').trim();
-  }
-
   List<InvoiceItem> _parseTableFromBlocks(List<TextBlock> blocks) {
     final List<InvoiceItem> items = [];
     Map<String, double> headerXPositions = {};
@@ -197,7 +190,7 @@ class _ReceiptScannerState extends State<ReceiptScanner> {
               }
             }
             headerYCoords.add(yPos);
-            print("Candidate header keyword '${text}' at X:${xPos}, Y:${yPos}");
+            print("Candidate header keyword '$text' at X:$xPos, Y:$yPos");
           }
         }
       }
@@ -242,7 +235,7 @@ class _ReceiptScannerState extends State<ReceiptScanner> {
             finalHeaderXPositions[text] = xPos;
             minHeaderY = min(minHeaderY, yPos);
             maxHeaderY = max(maxHeaderY, yPos + element.boundingBox.height);
-            print("Confirmed header keyword '${text}' at X:${xPos}, Y:${yPos}");
+            print("Confirmed header keyword '$text' at X:$xPos, Y:$yPos");
           }
         }
       }
@@ -272,7 +265,7 @@ class _ReceiptScannerState extends State<ReceiptScanner> {
         print("Checking line for end marker: '${line.text}' at Y:${line.boundingBox.top}");
         if (line.text.toLowerCase().contains('grand total')) {
           grandTotalLabelY = line.boundingBox.top;
-          print("Found 'GRAND TOTAL' label at Y:${grandTotalLabelY}");
+          print("Found 'GRAND TOTAL' label at Y:$grandTotalLabelY");
           break;
         }
       }
@@ -288,7 +281,7 @@ class _ReceiptScannerState extends State<ReceiptScanner> {
         for (final line in block.lines) {
           if (line.text.toLowerCase().contains('authorized signature')) {
             authSignatureY = line.boundingBox.top;
-            print("Found 'AUTHORIZED SIGNATURE' at Y:${authSignatureY} (fallback for table end)");
+            print("Found 'AUTHORIZED SIGNATURE' at Y:$authSignatureY (fallback for table end)");
             break;
           }
         }
@@ -381,12 +374,12 @@ class _ReceiptScannerState extends State<ReceiptScanner> {
 
           if (assignedColumn != null) {
             print(
-              "Assigning element '${elementText}' (X:${elementX}, Y:${element.boundingBox.top}) to column '${assignedColumn}'",
+              "Assigning element '$elementText' (X:$elementX, Y:${element.boundingBox.top}) to column '$assignedColumn'",
             );
             columnData[assignedColumn]!.add(elementText);
           } else {
             print(
-              "Element '${elementText}' (X:${elementX}, Y:${element.boundingBox.top}) NOT assigned to a column. Outside X-bounds.",
+              "Element '$elementText' (X:$elementX, Y:${element.boundingBox.top}) NOT assigned to a column. Outside X-bounds.",
             );
           }
         }
@@ -401,7 +394,7 @@ class _ReceiptScannerState extends State<ReceiptScanner> {
     final List<String> rateList = columnData['rate']!;
     final List<String> totalList = columnData['total']!;
 
-    if (noList.length == 0 ||
+    if (noList.isEmpty ||
         noList.length != monthsList.length ||
         noList.length != rateList.length ||
         noList.length != totalList.length ||
@@ -412,7 +405,7 @@ class _ReceiptScannerState extends State<ReceiptScanner> {
       print(
         "No: ${noList.length}, Desc: ${descriptionList.length}, Months: ${monthsList.length}, Rate: ${rateList.length}, Total: ${totalList.length}",
       );
-      if (noList.length == 0) return [];
+      if (noList.isEmpty) return [];
     }
 
     for (int i = 0; i < noList.length; i++) {
@@ -486,182 +479,184 @@ class _ReceiptScannerState extends State<ReceiptScanner> {
     ]);
 
     try {
-      if (kIsWeb) {
-        final List<int>? bytes = excel.save(fileName: 'Invoice_${invoice.invoiceNo}.xlsx');
-        if (bytes != null) {
-          final blob = web_html.Blob([Uint8List.fromList(bytes)]);
-          final url = web_html.Url.createObjectUrlFromBlob(blob);
-          final anchor = web_html.AnchorElement(href: url)
-            ..setAttribute("download", 'Invoice_${invoice.invoiceNo}.xlsx')
-            ..click();
-          web_html.Url.revokeObjectUrl(url);
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Invoice data exported to Excel (downloaded)!')));
-        } else {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Failed to generate Excel bytes for web.')));
-        }
-      } else {
-        if (kIsWeb) {
-          // ... (web export logic - remains the same)
-        } else {
-          // Mobile/Desktop platforms
-          // --- PLATFORM-SPECIFIC PERMISSION HANDLING ---
-          if (Platform.isAndroid) {
-            // Check Android version to determine permission strategy
-            final AndroidDeviceInfo androidInfo = await DeviceInfoPlugin().androidInfo;
-            final int sdkInt = androidInfo.version.sdkInt;
+      {
+        // Mobile/Desktop platforms
+        Directory? baseDirectory;
 
-            if (sdkInt >= 30) {
-              // Android 11 (API 30) and above
-              var status = await Permission.manageExternalStorage.status;
-              print("Debug: Initial MANAGE_EXTERNAL_STORAGE Status: $status");
+        // --- PLATFORM-SPECIFIC PERMISSION AND DIRECTORY HANDLING ---
+        if (Platform.isAndroid) {
+          final AndroidDeviceInfo androidInfo = await DeviceInfoPlugin().androidInfo;
+          final int sdkInt = androidInfo.version.sdkInt;
 
-              if (!status.isGranted) {
-                // Show custom dialog explaining why "All Files Access" is needed
-                bool userAgreedToRequest = await showDialog(
-                  context: context,
-                  builder: (BuildContext context) {
-                    return AlertDialog(
-                      title: const Text("Permission Needed: All Files Access"),
-                      content: const Text(
-                        "To save the Excel file directly to your device's Downloads folder, this app requires 'All Files Access' permission. Please grant it in the next screen.",
-                      ),
-                      actions: <Widget>[
-                        TextButton(
-                          child: const Text("Not Now"),
-                          onPressed: () {
-                            Navigator.of(context).pop(false);
-                          },
-                        ),
-                        TextButton(
-                          child: const Text("Continue"),
-                          onPressed: () {
-                            Navigator.of(context).pop(true);
-                          },
-                        ),
-                      ],
-                    );
-                  },
-                );
+          if (sdkInt >= 30) {
+            // Android 11 (API 30) and above
+            var status = await Permission.manageExternalStorage.status;
+            print("Debug: Initial MANAGE_EXTERNAL_STORAGE Status: $status");
 
-                if (userAgreedToRequest == true) {
-                  status = await Permission.manageExternalStorage
-                      .request(); // This often opens a separate settings screen
-                  print("Debug: After Request MANAGE_EXTERNAL_STORAGE Status: $status");
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Saving cancelled: Permission not granted.')),
-                  );
-                  return; // User declined explanation
-                }
-              }
-
-              if (!status.isGranted) {
-                // If permission is still not granted after request (user denied on settings screen)
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('All files access permission denied. Cannot save to Downloads.'),
-                    action: SnackBarAction(
-                      label: 'Go to Settings',
-                      onPressed: () {
-                        openAppSettings(); // Open app settings for user to manually enable
-                      },
+            if (!status.isGranted) {
+              bool userAgreedToRequest = await showDialog(
+                context: context,
+                builder: (BuildContext context) {
+                  return AlertDialog(
+                    title: const Text("Permission Needed: All Files Access"),
+                    content: const Text(
+                      "To save the Excel file directly to your device's Downloads folder, this app requires 'All Files Access' permission. Please grant it in the next screen.",
                     ),
-                  ),
-                );
-                return; // Exit if permission is not granted
-              }
-            } else {
-              // Android 10 (API 29) and below (where Permission.storage still works more reliably)
-              var status = await Permission.storage.status;
-              print("Debug: Initial Storage Permission Status (Android < 11): $status");
-
-              if (!status.isGranted) {
-                // Show custom dialog for older Android versions
-                bool userAgreedToRequest = await showDialog(
-                  context: context,
-                  builder: (BuildContext context) {
-                    return AlertDialog(
-                      title: const Text("Storage Permission Needed"),
-                      content: const Text(
-                        "To save the Excel file to your Downloads folder, this app needs storage access. Please grant the permission when prompted.",
+                    actions: <Widget>[
+                      TextButton(
+                        child: const Text("Not Now"),
+                        onPressed: () {
+                          Navigator.of(context).pop(false);
+                        },
                       ),
-                      actions: <Widget>[
-                        TextButton(
-                          child: const Text("Not Now"),
-                          onPressed: () {
-                            Navigator.of(context).pop(false);
-                          },
-                        ),
-                        TextButton(
-                          child: const Text("Continue"),
-                          onPressed: () {
-                            Navigator.of(context).pop(true);
-                          },
-                        ),
-                      ],
-                    );
-                  },
-                );
-
-                if (userAgreedToRequest == true) {
-                  status = await Permission.storage.request();
-                  print("Debug: After Request Storage Permission Status (Android < 11): $status");
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Saving cancelled: Permission not granted.')),
+                      TextButton(
+                        child: const Text("Continue"),
+                        onPressed: () {
+                          Navigator.of(context).pop(true);
+                        },
+                      ),
+                    ],
                   );
-                  return; // User declined explanation
-                }
-              }
-
-              if (!status.isGranted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Storage permission denied. Cannot save to Downloads.'),
-                    action: SnackBarAction(
-                      label: 'Go to Settings',
-                      onPressed: () {
-                        openAppSettings();
-                      },
-                    ),
-                  ),
-                );
-                return; // Exit if permission not granted
-              }
-            }
-          }
-          // --- END OF PLATFORM-SPECIFIC PERMISSION HANDLING ---
-
-          // --- Proceed with saving if permissions are granted ---
-          Directory? directory;
-          // On Android 11+, getDownloadsDirectory() relies on MANAGE_EXTERNAL_STORAGE.
-          // On iOS, it maps to app's documents.
-          directory = await getDownloadsDirectory();
-
-          if (directory != null) {
-            final String filePath = '${directory.path}/Invoice_${invoice.invoiceNo}.xlsx';
-            final File file = File(filePath);
-
-            final List<int>? bytes = excel.save();
-            if (bytes != null) {
-              await file.writeAsBytes(bytes);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Invoice data exported to Excel at $filePath')),
+                },
               );
-            } else {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text('Failed to generate Excel bytes for saving.')));
+
+              if (userAgreedToRequest == true) {
+                status = await Permission.manageExternalStorage
+                    .request(); // This often opens a separate settings screen
+                print("Debug: After Request MANAGE_EXTERNAL_STORAGE Status: $status");
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Saving cancelled: Permission not granted.')),
+                );
+                return; // User declined explanation
+              }
             }
+
+            if (!status.isGranted) {
+              // If permission is still not granted after request (user denied on settings screen)
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('All files access permission denied. Cannot save to Downloads.'),
+                  action: SnackBarAction(
+                    label: 'Go to Settings',
+                    onPressed: () {
+                      openAppSettings(); // Open app settings for user to manually enable
+                    },
+                  ),
+                ),
+              );
+              return; // Exit if permission is not granted
+            }
+            baseDirectory =
+                await getDownloadsDirectory(); // For Android, this should point to public Downloads
+          } else {
+            // Android 10 (API 29) and below
+            var status = await Permission.storage.status;
+            print("Debug: Initial Storage Permission Status (Android < 11): $status");
+
+            if (!status.isGranted) {
+              bool userAgreedToRequest = await showDialog(
+                context: context,
+                builder: (BuildContext context) {
+                  return AlertDialog(
+                    title: const Text("Storage Permission Needed"),
+                    content: const Text(
+                      "To save the Excel file to your Downloads folder, this app needs storage access. Please grant the permission when prompted.",
+                    ),
+                    actions: <Widget>[
+                      TextButton(
+                        child: const Text("Not Now"),
+                        onPressed: () {
+                          Navigator.of(context).pop(false);
+                        },
+                      ),
+                      TextButton(
+                        child: const Text("Continue"),
+                        onPressed: () {
+                          Navigator.of(context).pop(true);
+                        },
+                      ),
+                    ],
+                  );
+                },
+              );
+
+              if (userAgreedToRequest == true) {
+                status = await Permission.storage.request();
+                print("Debug: After Request Storage Permission Status (Android < 11): $status");
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Saving cancelled: Permission not granted.')),
+                );
+                return; // User declined explanation
+              }
+            }
+
+            if (!status.isGranted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Storage permission denied. Cannot save to Downloads.'),
+                  action: SnackBarAction(
+                    label: 'Go to Settings',
+                    onPressed: () {
+                      openAppSettings();
+                    },
+                  ),
+                ),
+              );
+              return; // Exit if permission not granted
+            }
+            baseDirectory =
+                await getDownloadsDirectory(); // For Android, this should point to public Downloads
+          }
+        } else if (Platform.isIOS) {
+          // On iOS, getDownloadsDirectory() maps to the app's sandboxed Documents directory.
+          // We'll create a "Downloads" sub-folder within that.
+          baseDirectory = await getDownloadsDirectory();
+          if (baseDirectory != null) {
+            // Define the specific sub-directory where you want to save the file
+            // Let's create 'Invoices' or 'ExcelExports' within the app's Documents folder.
+            final Directory targetDirectory = Directory('${baseDirectory.path}/ExcelExports');
+
+            // Check if the directory exists, if not, create it
+            if (!(await targetDirectory.exists())) {
+              await targetDirectory.create(recursive: true);
+              print("Debug: Created directory: ${targetDirectory.path}");
+            }
+            baseDirectory = targetDirectory; // Use this new directory as the base
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'On iOS, file saved to app documents. Look for "ExcelExports" folder.',
+                ),
+              ),
+            );
+          }
+        } else {
+          // For other platforms (e.g., Desktop), getDownloadsDirectory() should work directly.
+          baseDirectory = await getDownloadsDirectory();
+        }
+
+        // --- Proceed with saving if baseDirectory is determined and exists ---
+        if (baseDirectory != null) {
+          final String filePath = '${baseDirectory.path}/Invoice_${invoice.invoiceNo}.xlsx';
+          final File file = File(filePath);
+
+          final List<int>? bytes = excel.save();
+          if (bytes != null) {
+            await file.writeAsBytes(bytes);
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Invoice data exported to Excel at $filePath')));
           } else {
             ScaffoldMessenger.of(
               context,
-            ).showSnackBar(SnackBar(content: Text('Could not determine download directory.')));
+            ).showSnackBar(SnackBar(content: Text('Failed to generate Excel bytes for saving.')));
           }
+        } else {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Could not determine a valid save directory.')));
         }
       }
     } catch (e) {
