@@ -49,5 +49,14 @@
     <string>We need camera access to scan receipts.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>We need access to your gallery.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+        <string>This app requires local network access for debugging features like hot reload and DevTools.</string>
+        <key>NSBonjourServices</key>
+        <array>
+            <string>_dartobservatory._tcp</string>
+        </array>
+        <key>com.apple.security.network.client</key>
+            <true/>
+        </dict>
 </dict>
 </plist>
