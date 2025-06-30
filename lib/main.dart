@@ -4,10 +4,11 @@ import 'dart:io';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_ai_toolkit/flutter_ai_toolkit.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:receipt_management/features/welcome/presentation/welcome_screen.dart';
 import 'package:receipt_management/invoice.dart';
 
+import '../../../constants/app_color.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -15,36 +16,67 @@ void main() async {
   // Initialize FirebaseApp
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // final model = FirebaseAI.googleAI().generativeModel(model: 'gemini-2.5-flash');
-  //
-  // // Provide a prompt that contains text
-  // final prompt = [Content.text('Write a story about a magic backpack.')];
-  //
-  // // To generate text output, call generateContent with the text input
-  // final response = await model.generateContent(prompt);
-  // print(response.text);
-  runApp(MaterialApp(debugShowCheckedModeBanner: false, home: ReceiptScanner()));
-}
-
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('App.title')),
-    body: LlmChatView(
-      provider: FirebaseProvider(
-        // use FirebaseProvider and googleAI()
-        model: FirebaseAI.googleAI().generativeModel(model: 'gemini-2.0-flash'),
+  runApp(
+    MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: WelcomeScreen(),
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: AppColor.primary,
+          brightness: Brightness.light,
+        ),
+        textTheme: const TextTheme(
+          displayLarge: TextStyle(fontSize: 72, fontWeight: FontWeight.bold),
+          titleLarge: TextStyle(fontSize: 30, fontStyle: FontStyle.italic),
+          bodyMedium: TextStyle(fontSize: 16),
+        ),
+        appBarTheme: AppBarTheme(
+          backgroundColor: AppColor.primary,
+          foregroundColor: Colors.white,
+          centerTitle: true,
+          elevation: 4.0,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColor.primary,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          ),
+        ),
+        // >>> ADD THIS FLOATING ACTION BUTTON THEME <<<
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+          backgroundColor: AppColor.primary, // Set the background color
+          foregroundColor: Colors.white, // Set the icon/text color
+          // You can also customize other properties like:
+          // shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          // elevation: 8.0,
+        ),
       ),
     ),
   );
 }
+
+// class HomeScreen extends StatefulWidget {
+//   const HomeScreen({super.key});
+//
+//   @override
+//   State<HomeScreen> createState() => _HomeScreenState();
+// }
+//
+// class _HomeScreenState extends State<HomeScreen> {
+//   @override
+//   Widget build(BuildContext context) => Scaffold(
+//     appBar: AppBar(title: const Text('App.title')),
+//     body: LlmChatView(
+//       provider: FirebaseProvider(
+//         // use FirebaseProvider and googleAI()
+//         model: FirebaseAI.googleAI().generativeModel(model: 'gemini-2.0-flash'),
+//       ),
+//     ),
+//   );
+// }
 
 class ReceiptScanner extends StatefulWidget {
   const ReceiptScanner({super.key});
