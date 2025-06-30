@@ -5,8 +5,8 @@ import 'package:firebase_ai/firebase_ai.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:receipt_management/features/home/data/model/invoice.dart';
 import 'package:receipt_management/features/welcome/presentation/welcome_screen.dart';
-import 'package:receipt_management/invoice.dart';
 
 import '../../../constants/app_color.dart';
 import 'firebase_options.dart';

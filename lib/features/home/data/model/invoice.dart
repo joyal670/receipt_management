@@ -7,8 +7,17 @@ class Invoice {
   BillFrom? billFrom;
   List<Items>? items;
   String? grandTotal;
+  String? image; // This field exists
 
-  Invoice({this.invoiceNo, this.date, this.billTo, this.billFrom, this.items, this.grandTotal});
+  Invoice({
+    this.invoiceNo,
+    this.date,
+    this.billTo,
+    this.billFrom,
+    this.items,
+    this.grandTotal,
+    this.image, // Include in constructor
+  });
 
   Invoice copyWith({
     String? invoiceNo,
@@ -17,6 +26,7 @@ class Invoice {
     BillFrom? billFrom,
     List<Items>? items,
     String? grandTotal,
+    String? image, // Include in copyWith
   }) {
     return Invoice(
       invoiceNo: invoiceNo ?? this.invoiceNo,
@@ -25,6 +35,7 @@ class Invoice {
       billFrom: billFrom ?? this.billFrom,
       items: items ?? this.items,
       grandTotal: grandTotal ?? this.grandTotal,
+      image: image ?? this.image, // Handle image in copyWith
     );
   }
 
@@ -32,10 +43,11 @@ class Invoice {
     return {
       'invoiceNo': invoiceNo,
       'date': date,
-      'billTo': billTo,
-      'billFrom': billFrom,
-      'items': items,
+      'billTo': billTo?.toJson(), // Call toJson on nested objects
+      'billFrom': billFrom?.toJson(), // Call toJson on nested objects
+      'items': items?.map((e) => e.toJson()).toList(), // Call toJson on each item
       'grandTotal': grandTotal,
+      'image': image, // Include image in toJson
     };
   }
 
@@ -53,15 +65,16 @@ class Invoice {
           ?.map((e) => Items.fromJson(e as Map<String, dynamic>))
           .toList(),
       grandTotal: json['grandTotal'] as String?,
+      image: json['image'] as String?, // Include image in fromJson
     );
   }
 
   @override
   String toString() =>
-      "Invoice(invoiceNo: $invoiceNo,date: $date,billTo: $billTo,billFrom: $billFrom,items: $items,grandTotal: $grandTotal)";
+      "Invoice(invoiceNo: $invoiceNo, date: $date, billTo: $billTo, billFrom: $billFrom, items: $items, grandTotal: $grandTotal, image: $image)"; // Include image in toString
 
   @override
-  int get hashCode => Object.hash(invoiceNo, date, billTo, billFrom, items, grandTotal);
+  int get hashCode => Object.hash(invoiceNo, date, billTo, billFrom, items, grandTotal, image); // Include image in hashCode
 
   @override
   bool operator ==(Object other) =>
@@ -73,8 +86,11 @@ class Invoice {
           billTo == other.billTo &&
           billFrom == other.billFrom &&
           items == other.items &&
-          grandTotal == other.grandTotal;
+          grandTotal == other.grandTotal &&
+          image == other.image; // Include image in operator==
 }
+
+// Your other classes (BillTo, BillFrom, Items) remain the same as they are self-contained.
 
 class BillTo {
   String? name;
@@ -209,6 +225,10 @@ class Items {
           total == other.total;
 }
 
+// The schema does not need to include 'image' because the schema is for the *extracted data*,
+// not for the original source image of the invoice. The 'image' field in your Dart class
+// is typically a reference (e.g., a URL to a storage bucket) to the original image itself,
+// which is handled separately from the AI's data extraction process.
 final invoiceSchema = Schema.object(
   properties: {
     'invoiceNo': Schema.string(description: 'Unique invoice number'),
