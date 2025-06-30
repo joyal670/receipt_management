@@ -39,7 +39,6 @@ class _HomeScreenState extends State<HomeScreen> {
             onTap: (index) {
               currentIndex.value = index;
             },
-            // tabCurve: ,
             padding: const EdgeInsets.only(left: 16, right: 16, bottom: 20),
             cornerRadius: const BorderRadius.only(
               topLeft: Radius.circular(8),
@@ -47,16 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
               bottomRight: Radius.circular(24),
               bottomLeft: Radius.circular(24),
             ),
-            // shadowColor: Colors.deepPurple,
-            // circleShadowColor: Colors.deepPurple,
             elevation: 10,
-            //  shadowColor: Colors.deepPurple,
-            // circleShadowColor: Colors.deepPurple,
-            // gradient: LinearGradient(
-            //   begin: Alignment.topRight,
-            //   end: Alignment.bottomLeft,
-            //   colors: [Colors.blue, Colors.red],
-            // ),
             circleGradient: LinearGradient(
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,

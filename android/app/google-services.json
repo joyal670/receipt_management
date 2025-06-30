@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "389036874350",
+    "project_id": "receipt-management-joyal",
+    "storage_bucket": "receipt-management-joyal.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:389036874350:android:55589b4161e49b45d6647f",
+        "android_client_info": {
+          "package_name": "com.example.receipt_management"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCc2vrwp2QpGHrvbvVmzon8CSN-y2bqYTE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
