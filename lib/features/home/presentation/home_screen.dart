@@ -2,14 +2,18 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:circle_nav_bar/circle_nav_bar.dart';
+import 'package:excel/excel.dart' as excel_package; // Use a prefix to avoid conflict
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart'; // Import for path provider
+import 'package:permission_handler/permission_handler.dart'; // Import for permissions
 import 'package:receipt_management/features/home/data/model/invoice.dart';
 
 import '../../../constants/app_color.dart';
 import 'widget/empty_widget.dart';
+import 'widget/invoice_details_dialog.dart'; // <--- Ensure this is imported
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -57,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     currentStatus.value = 'Scanning invoice...';
     try {
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(milliseconds: 500));
 
       final inputImage = await File(pickedFile.path).readAsBytes();
 
@@ -81,18 +85,43 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (response.text != null && response.text!.isNotEmpty) {
         currentStatus.value = 'Extracting document data...';
-        await Future.delayed(const Duration(seconds: 2));
+        await Future.delayed(const Duration(milliseconds: 500));
         try {
           final Map<String, dynamic> jsonMap = jsonDecode(response.text!);
           final result = Invoice.fromJson(jsonMap);
           result.image = pickedFile.path;
 
-          final List<Invoice> updatedInvoices = List.from(invoicesNotifier.value)..add(result);
-          invoicesNotifier.value = updatedInvoices;
+          // --- Show popup with details HERE (for newly scanned invoice) ---
+          currentStatus.value = null; // Hide progress before showing dialog
+          bool? confirmSave = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false, // User must choose confirm/cancel
+            builder: (BuildContext dialogContext) {
+              return InvoiceDetailsDialog(
+                invoice: result,
+                onConfirm: () {
+                  Navigator.of(dialogContext).pop(true); // Pop with true for confirm
+                },
+                onCancel: () {
+                  Navigator.of(dialogContext).pop(false); // Pop with false for cancel
+                },
+              );
+            },
+          );
 
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Invoice scanned and added successfully!')));
+          if (confirmSave == true) {
+            final List<Invoice> updatedInvoices = List.from(invoicesNotifier.value)..add(result);
+            invoicesNotifier.value = updatedInvoices;
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Invoice scanned and added successfully!')),
+            );
+          } else {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Invoice data discarded.')));
+          }
+          // --- END Show popup ---
         } on FormatException catch (e) {
           debugPrint('JSON decoding error: $e');
           ScaffoldMessenger.of(context).showSnackBar(
@@ -120,8 +149,152 @@ class _HomeScreenState extends State<HomeScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to scan image: ${e.toString()}')));
     } finally {
+      // currentStatus.value = null; // This is now handled after dialog interaction
+    }
+  }
+
+  Future<void> _exportInvoiceToExcel(Invoice invoice) async {
+    currentStatus.value = 'Preparing Excel export...';
+    try {
+      // 1. Request Storage Permission
+      var status = await Permission.storage.request();
+      if (!status.isGranted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Storage permission denied. Cannot export.')));
+        return;
+      }
+
+      // 2. Create an Excel workbook and sheet
+      final excel_package.Excel excel = excel_package.Excel.createExcel();
+      final excel_package.Sheet sheetObject = excel['InvoiceData']; // You can name your sheet
+
+      // 3. Add headers
+      // Ensure all header values are wrapped in TextCellValue for consistency
+      sheetObject.appendRow([
+        excel_package.TextCellValue('Invoice Number'),
+        excel_package.TextCellValue('Date'),
+        excel_package.TextCellValue(
+          'Vendor Name',
+        ), // Changed to 'Vendor Name' as per common invoice structure
+        excel_package.TextCellValue('Total Amount'),
+        excel_package.TextCellValue('Currency'), // Added back Currency header
+        excel_package.TextCellValue('Items'),
+      ]);
+
+      // 4. Add invoice data
+      // For items, serialize them into a string for a single cell
+      // Using '\n' for newlines within the cell to improve readability if opened in Excel
+      String itemsString = (invoice.items ?? [])
+          .map(
+            (item) =>
+                '${item.description ?? ''} (Qty: ${item.quantity ?? ''}, Rate: ${item.rate ?? ''}, Total: ${item.total ?? ''})',
+          )
+          .join('\n');
+
+      sheetObject.appendRow([
+        excel_package.TextCellValue(invoice.invoiceNo ?? ''),
+        excel_package.TextCellValue(invoice.date ?? ''),
+        excel_package.TextCellValue(
+          invoice.billFrom?.name ?? '',
+        ), // Vendor name usually comes from billFrom
+        excel_package.TextCellValue(invoice.grandTotal ?? ''),
+        excel_package.TextCellValue(itemsString),
+      ]);
+
+      // Optional: Auto-fit columns for better readability (requires iterating through columns)
+      // Updated to 6 columns to match the new headers
+      for (int i = 0; i < 6; i++) {
+        sheetObject.setColumnAutoFit(i);
+      }
+
+      // 5. Save the Excel file bytes
+      final List<int>? excelBytes = excel.save();
+      if (excelBytes == null) {
+        throw 'Failed to generate Excel file bytes.';
+      }
+
+      // 6. Get Directory and Save File
+      Directory? directory;
+      if (Platform.isAndroid) {
+        directory = await getExternalStorageDirectory();
+      } else if (Platform.isIOS) {
+        directory = await getApplicationDocumentsDirectory();
+      } else {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (directory == null) {
+        throw 'Could not get a suitable directory for saving.';
+      }
+
+      final String fileName =
+          'invoice_${invoice.invoiceNo ?? 'unknown'}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+      final String filePath = '${directory.path}/$fileName';
+      final File file = File(filePath);
+
+      await file.writeAsBytes(excelBytes);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invoice exported to: ${file.path}'),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+      debugPrint('Invoice exported to: ${file.path}');
+    } catch (e) {
+      debugPrint('Error exporting invoice to Excel: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to export invoice to Excel: ${e.toString()}')));
+    } finally {
       currentStatus.value = null;
     }
+  }
+
+  void _showInvoiceOptionsBottomSheet(BuildContext context, Invoice invoice) {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext bc) {
+        return SafeArea(
+          child: Wrap(
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.share),
+                title: const Text('Share'),
+                onTap: () {
+                  Navigator.pop(bc);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Sharing invoice ${invoice.invoiceNo ?? ''}')),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text('Delete'),
+                onTap: () {
+                  Navigator.pop(bc);
+                  final List<Invoice> currentInvoices = List.from(invoicesNotifier.value);
+                  currentInvoices.remove(invoice);
+                  invoicesNotifier.value = currentInvoices;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Invoice ${invoice.invoiceNo ?? ''} deleted.')),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.download),
+                title: const Text('Export to Excel (.xlsx)'), // Clearly indicate file type
+                onTap: () {
+                  Navigator.pop(bc);
+                  _exportInvoiceToExcel(invoice); // Trigger the Excel export
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildInvoiceGridView() {
@@ -129,7 +302,7 @@ class _HomeScreenState extends State<HomeScreen> {
       valueListenable: invoicesNotifier,
       builder: (context, invoices, child) {
         if (invoices.isEmpty) {
-          return Center(child: EmptyWidget());
+          return const Center(child: EmptyWidget()); // Use const for EmptyWidget
         } else {
           return GridView.builder(
             itemCount: invoices.length,
@@ -143,10 +316,30 @@ class _HomeScreenState extends State<HomeScreen> {
             itemBuilder: (context, index) {
               final invoice = invoices[index];
               return GestureDetector(
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Tapped on invoice: ${invoice.invoiceNo ?? 'N/A'}')),
+                onTap: () async {
+                  // Show the InvoiceDetailsDialog when tapping an existing invoice
+                  await showDialog<bool>(
+                    context: context,
+                    barrierDismissible: true, // Allow dismissing by tapping outside
+                    builder: (BuildContext dialogContext) {
+                      return InvoiceDetailsDialog(
+                        invoice: invoice,
+                        onConfirm: () {
+                          // If you want to allow editing and saving changes,
+                          // you'd typically pop with the edited invoice here.
+                          // For now, it just closes the dialog.
+                          Navigator.of(dialogContext).pop(true);
+                        },
+                        onCancel: () {
+                          Navigator.of(dialogContext).pop(false);
+                        },
+                      );
+                    },
                   );
+                  // Optional: Add a snackbar here if you want to confirm the dialog was closed
+                  // ScaffoldMessenger.of(context).showSnackBar(
+                  //   SnackBar(content: Text('Invoice details viewed for ${invoice.invoiceNo ?? 'N/A'}')),
+                  // );
                 },
                 child: Container(
                   decoration: BoxDecoration(
@@ -219,15 +412,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   padding: EdgeInsets.zero,
                                   visualDensity: VisualDensity.compact,
                                 ),
-                                onPressed: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'More options for invoice ${invoice.invoiceNo ?? ''}',
-                                      ),
-                                    ),
-                                  );
-                                },
+                                onPressed: () => _showInvoiceOptionsBottomSheet(context, invoice),
                                 icon: Icon(Icons.more_vert, color: AppColor.white),
                               ),
                             ],
@@ -248,6 +433,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(title: const Text('My Receipts'), centerTitle: true),
       floatingActionButtonLocation: ExpandableFab.location,
       floatingActionButton: ExpandableFab(
         key: _fabKey,
@@ -314,7 +500,6 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
-
           ValueListenableBuilder<String?>(
             valueListenable: currentStatus,
             builder: (context, status, child) {

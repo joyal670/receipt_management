@@ -90,7 +90,7 @@ class Invoice {
           image == other.image; // Include image in operator==
 }
 
-// Your other classes (BillTo, BillFrom, Items) remain the same as they are self-contained.
+// Your other classes (BillTo, BillFrom) remain the same as they are self-contained.
 
 class BillTo {
   String? name;
@@ -181,38 +181,49 @@ class BillFrom {
 class Items {
   int? no;
   String? description;
+  String? quantity; // Added quantity field
   String? rate;
   String? total;
 
-  Items({this.no, this.description, this.rate, this.total});
+  Items({this.no, this.description, this.quantity, this.rate, this.total}); // Updated constructor
 
-  Items copyWith({int? no, String? description, String? rate, String? total}) {
+  Items copyWith({int? no, String? description, String? quantity, String? rate, String? total}) {
+    // Updated copyWith
     return Items(
       no: no ?? this.no,
       description: description ?? this.description,
+      quantity: quantity ?? this.quantity, // Handle quantity in copyWith
       rate: rate ?? this.rate,
       total: total ?? this.total,
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {'no': no, 'description': description, 'rate': rate, 'total': total};
+    return {
+      'no': no,
+      'description': description,
+      'quantity': quantity, // Include quantity in toJson
+      'rate': rate,
+      'total': total,
+    };
   }
 
   factory Items.fromJson(Map<String, dynamic> json) {
     return Items(
       no: json['no'] as int?,
       description: json['description'] as String?,
+      quantity: json['quantity'] as String?, // Include quantity in fromJson
       rate: json['rate'] as String?,
       total: json['total'] as String?,
     );
   }
 
   @override
-  String toString() => "Items(no: $no,description: $description,rate: $rate,total: $total)";
+  String toString() =>
+      "Items(no: $no,description: $description,quantity: $quantity,rate: $rate,total: $total)"; // Updated toString
 
   @override
-  int get hashCode => Object.hash(no, description, rate, total);
+  int get hashCode => Object.hash(no, description, quantity, rate, total); // Updated hashCode
 
   @override
   bool operator ==(Object other) =>
@@ -221,6 +232,7 @@ class Items {
           runtimeType == other.runtimeType &&
           no == other.no &&
           description == other.description &&
+          quantity == other.quantity && // Include quantity in operator==
           rate == other.rate &&
           total == other.total;
 }
@@ -255,6 +267,9 @@ final invoiceSchema = Schema.object(
         properties: {
           'no': Schema.integer(description: 'Item number'),
           'description': Schema.string(description: 'Description of the item'),
+          'quantity': Schema.string(
+            description: 'Quantity of the item (e.g., "2", "1.5")',
+          ), // Added quantity to schema
           'rate': Schema.string(description: 'Rate per unit (e.g., "5000.00")'),
           'total': Schema.string(description: 'Total for the item (e.g., "5000.00")'),
         },
